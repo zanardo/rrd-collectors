@@ -1,0 +1,74 @@
+#!/usr/bin/env python
+#
+# Copyright (c) J. A. Zanardo Jr. <zanardo@gmail.com>
+# Please refer to COPYING for license details
+# Please refer to README for general instructions
+#
+
+"""
+
+Network interface traffic collector.
+
+Usage:
+
+    rrd-iftraff RRDHOST:RRDPORT RRDNAME INTERFACE
+
+Suggested data configuration:
+
+    --step=60
+    DS:rx:COUNTER:120:0:U
+    DS:tx:COUNTER:120:0:U
+    RRA:AVERAGE:0.5:1:120
+    RRA:AVERAGE:0.5:5:288
+    RRA:AVERAGE:0.5:30:336
+    RRA:AVERAGE:0.5:120:360
+    RRA:AVERAGE:0.5:1440:360
+
+Suggested graph configuration:
+
+    --title=Network traffic on eth0
+    --lower-limit=0
+    DEF:rx=localhost-iftraff-eth0.rrd:rx:AVERAGE
+    DEF:tx=localhost-iftraff-eth0.rrd:tx:AVERAGE
+    CDEF:tx8=tx,8,*
+    CDEF:rx8=rx,8,*
+    VDEF:txt=tx,TOTAL
+    VDEF:rxt=rx,TOTAL
+    AREA:rx8#32CD32:RX
+    GPRINT:rx8:MAX:Max\:%3.0lf%S
+    GPRINT:rx8:AVERAGE:Avg\:%3.0lf%S
+    GPRINT:rx8:LAST:Now\:%3.0lf%Sbits/s\\n
+    LINE1:tx8#0000FF:TX
+    GPRINT:tx8:MAX:Max\:%3.0lf%S
+    GPRINT:tx8:AVERAGE:Avg\:%3.0lf%S
+    GPRINT:tx8:LAST:Now\:%3.0lf%Sbits/s\\n
+    COMMENT:Total\:
+    GPRINT:rxt:%3.3lf%sb RX
+    GPRINT:txt:%3.3lf%sb TX   total transferred (in this graph period)
+
+"""
+
+import socket, sys, re
+
+rrdhost, rrdport = sys.argv[1].split(':')
+rrdname = sys.argv[2]
+interface = sys.argv[3]
+
+rx = None
+tx = None
+
+fp = open('/proc/net/dev')
+for line in fp:
+    s = re.split(' *', line)
+    if s[1] == interface + ':':
+        rx = int(s[2])
+        tx = int(s[10])
+fp.close()
+
+if rx is None or tx is None:
+    exit(1)
+
+# Sending data via UDP
+msg = "%s N:%d:%d" % ( rrdname, rx, tx ) 
+socket.socket(socket.AF_INET, socket.SOCK_DGRAM).sendto(msg, (rrdhost, int(rrdport)))
+sys.stderr.write(msg + '\n')
