@@ -1,0 +1,77 @@
+#!/usr/bin/env python
+#
+# Copyright (c) J. A. Zanardo Jr. <zanardo@gmail.com>
+# Please refer to COPYING for license details
+# Please refer to README for general instructions
+#
+
+"""
+
+CPU usage (user, nice, system and idle) rrd collector.
+It sleeps for 60 seconds to calculate the average usage.
+
+Usage:
+
+    rrd-cpu RRDHOST:RRDPORT RRDNAME
+
+Suggested data configuration:
+
+    --step=60
+    DS:user:GAUGE:120:0:100
+    DS:nice:GAUGE:120:0:100
+    DS:system:GAUGE:120:0:100
+    DS:idle:GAUGE:120:0:100
+    RRA:AVERAGE:0.5:1:120
+    RRA:AVERAGE:0.5:5:288
+    RRA:AVERAGE:0.5:30:336
+    RRA:AVERAGE:0.5:120:360
+    RRA:AVERAGE:0.5:1440:360
+
+Suggested graph configuration:
+
+    --title=CPU usage
+    --lower-limit=0
+    --upper-limit=100
+    --rigid
+    DEF:user=localhost-cpu.rrd:user:AVERAGE
+    DEF:nice=localhost-cpu.rrd:nice:AVERAGE
+    DEF:system=localhost-cpu.rrd:system:AVERAGE
+    DEF:idle=localhost-cpu.rrd:idle:AVERAGE
+    AREA:system#4B0082:system
+    STACK:nice#FFA07A:nice
+    STACK:user#0000FF:user
+    STACK:idle#FFFFFF:idle
+
+"""
+
+import socket, sys, re, time
+
+rrdhost, rrdport = sys.argv[1].split(':')
+rrdname = sys.argv[2]
+
+def getstats():
+    f = open('/proc/stat')
+    for line in f:
+        m = re.match('^cpu +(\d+) +(\d+) +(\d+)+ (\d+) ', line)
+        if m:
+            user, nice, system, idle = m.groups()
+            return ( int(user), int(nice), int(system), int(idle) )
+
+user1, nice1, system1, idle1 = getstats()
+time.sleep(60)
+user2, nice2, system2, idle2 = getstats()
+
+total = ( user2 + system2 + nice2 + idle2 ) - \
+    ( user1 + system1 + nice1 + idle1 )
+
+total *= 1.0
+
+puser = ( user2 - user1 ) / total * 100.0
+pnice = ( nice2 - nice1 ) / total * 100.0
+psystem = ( system2 - system1 ) / total * 100.0
+pidle = ( idle2 - idle1 ) / total * 100.0
+
+# Sending data via UDP
+msg = "%s N:%.2f:%.2f:%.2f:%.2f" % ( rrdname, puser, pnice, psystem, pidle)
+socket.socket(socket.AF_INET, socket.SOCK_DGRAM).sendto(msg, (rrdhost, int(rrdport)))
+sys.stderr.write(msg + '\n')
