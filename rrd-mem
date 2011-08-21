@@ -1,0 +1,71 @@
+#!/usr/bin/env python
+#
+# Copyright (c) J. A. Zanardo Jr. <zanardo@gmail.com>
+# Please refer to COPYING for license details
+# Please refer to README for general instructions
+#
+
+"""
+
+Used memory/swap collector.
+
+Usage:
+
+    rrd-memory RRDHOST:RRDPORT RRDNAME
+
+Suggested data configuration:
+
+    --step=60
+    DS:memory:GAUGE:120:0:U
+    DS:swap:GAUGE:120:0:U
+    RRA:AVERAGE:0.5:1:120
+    RRA:AVERAGE:0.5:5:288
+    RRA:AVERAGE:0.5:30:336
+    RRA:AVERAGE:0.5:120:360
+    RRA:AVERAGE:0.5:1440:360
+
+Suggested graph configuration:
+
+    --title=localhost: Memory usage
+    --lower-limit=0
+    DEF:memory=localhost-memory.rrd:memory:AVERAGE
+    DEF:swap=localhost-memory.rrd:swap:AVERAGE
+    CDEF:bmemory=memory,1024,*
+    CDEF:bswap=swap,1024,*
+    CDEF:btotal=bswap,bmemory,+
+    AREA:bmemory#0000FF:Physical Memory Used
+    GPRINT:bmemory:MAX:Max\:%3.0lf%S
+    GPRINT:bmemory:AVERAGE:Avg\:%3.0lf%S
+    GPRINT:bmemory:LAST:Now\:%3.0lf%S\\n
+    STACK:bswap#FF0000:Swap Used
+    GPRINT:bswap:MAX:                 Max\:%3.0lf%S
+    GPRINT:bswap:AVERAGE:Avg\:%3.0lf%S
+    GPRINT:bswap:LAST:Now\:%3.0lf%S\\n
+    GPRINT:btotal:MAX:                                 Total\: Max\:%3.0lf%S
+    GPRINT:btotal:AVERAGE:Avg\:%3.0lf%S
+    GPRINT:btotal:LAST:Now\:%3.0lf%S\\n
+
+"""
+
+import socket, sys, re
+
+rrdhost, rrdport = sys.argv[1].split(':')
+rrdname = sys.argv[2]
+
+fp = open('/proc/meminfo')
+for line in fp:
+    m = re.match('MemTotal: *(\d+) kB', line)
+    if m: memory = int(m.group(1))
+    m = re.match('SwapTotal: *(\d+) kB', line)
+    if m: swap = int(m.group(1))
+    m = re.match('(?:MemFree|Cached|Buffers): *(\d+) kB', line)
+    if m: memory -= int(m.group(1))
+    m = re.match('SwapFree: *(\d+) kB', line)
+    if m: swap -= int(m.group(1))
+
+fp.close()
+
+# Sending data via UDP
+msg = "%s N:%d:%d" % ( rrdname, memory, swap )
+socket.socket(socket.AF_INET, socket.SOCK_DGRAM).sendto(msg, (rrdhost, int(rrdport)))
+sys.stderr.write(msg + '\n')
