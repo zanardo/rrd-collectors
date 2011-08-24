@@ -1,0 +1,18 @@
+rrd collectors
+
+  This is a distribution of example collectors for rrd. You can learn about
+  rrd by visiting https://github.com/zanardo/rrd
+
+installing the sample collectors
+
+  As root:
+
+  # cd /opt
+  # git clone git://github.com/zanardo/rrd-collectors.git
+
+using these collectors
+
+  Each collector has documentation embedded in source code. Generally, they
+  should be called from cron and some command line arguments must be
+  passed, like the rrd host and port, rrd database name, and some specific
+  argument for each script.
